@@ -195,6 +195,16 @@ class ApiClient {
   getAnalytics() { return this.request<any>('/analytics'); }
   getAuditLogs() { return this.request<{ audit_logs: AuditLog[] }>('/audit-logs'); }
   getExternalWeather() { return this.request<any>('/external/weather'); }
+
+  // Supabase Cloud Integration
+  getSupabaseStatus() { return this.request<any>('/supabase/status'); }
+  testSupabase(url: string, key: string) {
+    return this.request<any>('/supabase/test', {
+      method: 'POST',
+      body: JSON.stringify({ url, key })
+    });
+  }
+  syncSupabase() { return this.request<any>('/supabase/sync', { method: 'POST' }); }
 }
 
 export const api = new ApiClient();

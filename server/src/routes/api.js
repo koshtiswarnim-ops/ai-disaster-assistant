@@ -9,6 +9,7 @@ import { routingService } from '../services/routingService.js';
 import { simulationEngine } from '../services/simulationEngine.js';
 import { externalApis } from '../services/externalApis.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
+import { getSupabaseConfig, testSupabaseConnection, syncStoreToSupabase, syncEntityToSupabase } from '../database/supabase.js';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'disasteros_secret_development_key_2026';
@@ -16,15 +17,44 @@ const JWT_SECRET = process.env.JWT_SECRET || 'disasteros_secret_development_key_
 // -------------------------------------------------------------
 // 1. HEALTH & SYSTEM DIAGNOSTICS (Section 44)
 // -------------------------------------------------------------
-router.get('/health', (req, res) => {
+router.get('/health', async (req, res) => {
+  const supabaseCfg = getSupabaseConfig();
   res.json({
     status: "ok",
-    database: "connected",
+    database: supabaseCfg.isConfigured ? "supabase_hybrid" : "embedded_store",
+    supabase: {
+      configured: supabaseCfg.isConfigured,
+      url: supabaseCfg.url ? `${supabaseCfg.url.slice(0, 24)}...` : null
+    },
     realtime: "active",
     ai_engine: "ready",
     active_incidents: store.incidents.length,
     timestamp: new Date().toISOString()
   });
+});
+
+// -------------------------------------------------------------
+// 1.1 SUPABASE CLOUD DATABASE ENDPOINTS
+// -------------------------------------------------------------
+router.get('/supabase/status', async (req, res) => {
+  const result = await testSupabaseConnection();
+  const config = getSupabaseConfig();
+  res.json({
+    ...result,
+    url: config.url ? `${config.url.slice(0, 24)}...` : null,
+    isConfigured: config.isConfigured
+  });
+});
+
+router.post('/supabase/test', async (req, res) => {
+  const { url, key } = req.body;
+  const result = await testSupabaseConnection(url, key);
+  res.json(result);
+});
+
+router.post('/supabase/sync', async (req, res) => {
+  const result = await syncStoreToSupabase(store);
+  res.json(result);
 });
 
 // -------------------------------------------------------------
@@ -124,6 +154,26 @@ router.post('/sos', (req, res) => {
     priority: priorityResult
   });
 
+  // 4.1 Sync to Supabase Cloud Database (non-blocking)
+  syncEntityToSupabase('incidents', {
+    id: createdIncident.id,
+    tracking_code: createdIncident.tracking_code,
+    type: createdIncident.type,
+    title: createdIncident.title,
+    description: createdIncident.description,
+    latitude: createdIncident.latitude,
+    longitude: createdIncident.longitude,
+    address: createdIncident.address,
+    status: createdIncident.status,
+    severity: createdIncident.severity,
+    priority_score: createdIncident.priority_score,
+    affected_count: createdIncident.affected_count || 1,
+    injured_count: createdIncident.injured_count || 0,
+    trapped_count: createdIncident.trapped_count || 0,
+    has_children_elderly: Boolean(createdIncident.has_children_elderly),
+    medical_urgency: Boolean(createdIncident.medical_urgency)
+  });
+
   // 5. Emit dynamic reallocation check if critical
   if (priorityResult.priority === 'critical') {
     eventBus.broadcast('INCIDENT_ESCALATED', {
@@ -156,6 +206,7 @@ router.patch('/incidents/:id', authenticate, (req, res) => {
   if (!updated) return res.status(404).json({ error: "Incident not found" });
   
   eventBus.broadcast('INCIDENT_UPDATED', updated);
+  syncEntityToSupabase('incidents', updated);
   res.json({ incident: updated });
 });
 
@@ -243,6 +294,7 @@ router.patch('/vehicles/:id', authenticate, (req, res) => {
   store.vehicles[index] = { ...store.vehicles[index], ...req.body, updated_at: new Date().toISOString() };
   
   eventBus.broadcast('VEHICLE_STATUS_CHANGED', store.vehicles[index]);
+  syncEntityToSupabase('vehicles', store.vehicles[index]);
   res.json({ vehicle: store.vehicles[index] });
 });
 
@@ -261,6 +313,7 @@ router.patch('/rescue-teams/:id', authenticate, (req, res) => {
   if (req.body.phone) team.phone = req.body.phone;
   if (req.body.capacity !== undefined) team.capacity = Number(req.body.capacity);
   eventBus.broadcast('TEAM_STATUS_CHANGED', team);
+  syncEntityToSupabase('rescue_teams', team);
   res.json({ rescue_team: team });
 });
 
@@ -278,6 +331,7 @@ router.post('/missions', authenticate, (req, res) => {
     vehicle_id: newMission.vehicle_id,
     mission_id: newMission.id
   });
+  syncEntityToSupabase('missions', newMission);
 
   res.status(201).json({ success: true, mission: newMission });
 });
@@ -290,6 +344,7 @@ router.patch('/missions/:id', authenticate, (req, res) => {
   if (updated.status === 'completed') {
     eventBus.broadcast('MISSION_COMPLETED', updated);
   }
+  syncEntityToSupabase('missions', updated);
 
   res.json({ mission: updated });
 });
@@ -310,6 +365,7 @@ router.patch('/hospitals/:id/capacity', authenticate, (req, res) => {
   if (req.body.status) hospital.status = req.body.status;
   
   eventBus.broadcast('HOSPITAL_CAPACITY_CHANGED', hospital);
+  syncEntityToSupabase('hospitals', hospital);
   res.json({ hospital });
 });
 
@@ -325,6 +381,7 @@ router.patch('/shelters/:id/occupancy', authenticate, (req, res) => {
   if (req.body.status) shelter.status = req.body.status;
   
   eventBus.broadcast('SHELTER_CAPACITY_CHANGED', shelter);
+  syncEntityToSupabase('shelters', shelter);
   res.json({ shelter });
 });
 

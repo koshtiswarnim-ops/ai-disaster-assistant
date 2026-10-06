@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   UserRound, 
   SlidersHorizontal, 
@@ -14,14 +14,190 @@ import {
   Webhook, 
   Inbox, 
   BarChart3, 
-  Megaphone 
+  Megaphone,
+  Database,
+  Copy,
+  ExternalLink,
+  RefreshCw,
+  Sparkles
 } from 'lucide-react';
 import { HeaderBand } from '../components/layout/HeaderBand';
+import { api } from '../services/api';
+import { getSupabaseConfig, configureSupabase, testSupabaseConnection as testClientSupabase } from '../services/supabase';
 
 export const WorkspaceSettingsPage: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<'profile' | 'behaviour' | 'notifications' | 'delivery' | 'danger'>('profile');
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(true);
-  const [unsavedCount, setUnsavedCount] = useState<number>(3);
+  const [activeSection, setActiveSection] = useState<'profile' | 'supabase' | 'behaviour' | 'notifications' | 'delivery' | 'danger'>('profile');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
+  const [unsavedCount, setUnsavedCount] = useState<number>(0);
+
+  // Supabase State
+  const initialSupabase = getSupabaseConfig();
+  const [supabaseUrl, setSupabaseUrl] = useState<string>(initialSupabase.url);
+  const [supabaseAnonKey, setSupabaseAnonKey] = useState<string>(initialSupabase.anonKey);
+  const [supabaseStatus, setSupabaseStatus] = useState<any>(null);
+  const [isTestingSupabase, setIsTestingSupabase] = useState<boolean>(false);
+  const [isSyncingSupabase, setIsSyncingSupabase] = useState<boolean>(false);
+  const [supabaseFeedback, setSupabaseFeedback] = useState<string | null>(null);
+  const [copiedSchema, setCopiedSchema] = useState<boolean>(false);
+
+  useEffect(() => {
+    api.getSupabaseStatus().then(res => setSupabaseStatus(res)).catch(() => {});
+  }, []);
+
+  const handleTestSupabase = async () => {
+    setIsTestingSupabase(true);
+    setSupabaseFeedback(null);
+    try {
+      const res = await api.testSupabase(supabaseUrl, supabaseAnonKey);
+      setSupabaseStatus(res);
+      setSupabaseFeedback(res.message);
+    } catch (err: any) {
+      setSupabaseFeedback(`Test failed: ${err.message}`);
+    } finally {
+      setIsTestingSupabase(false);
+    }
+  };
+
+  const handleSaveSupabase = () => {
+    configureSupabase(supabaseUrl, supabaseAnonKey);
+    setSupabaseFeedback('Supabase credentials stored in browser session.');
+    setTimeout(() => setSupabaseFeedback(null), 4000);
+  };
+
+  const handleSyncSupabase = async () => {
+    setIsSyncingSupabase(true);
+    try {
+      const res = await api.syncSupabase();
+      if (res.success) {
+        setSupabaseFeedback('Data successfully synchronized to Supabase PostgreSQL!');
+      } else {
+        setSupabaseFeedback(res.message || 'Sync completed with warnings.');
+      }
+    } catch (err: any) {
+      setSupabaseFeedback(`Sync error: ${err.message}`);
+    } finally {
+      setIsSyncingSupabase(false);
+    }
+  };
+
+  const handleCopySchema = () => {
+    const ddl = `-- DISASTEROS SUPABASE DATABASE SCHEMA
+CREATE TABLE IF NOT EXISTS disasters (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title VARCHAR(255) NOT NULL,
+  type VARCHAR(50) NOT NULL,
+  severity VARCHAR(50) NOT NULL,
+  status VARCHAR(50) NOT NULL DEFAULT 'active',
+  epicenter_lat DOUBLE PRECISION NOT NULL,
+  epicenter_lng DOUBLE PRECISION NOT NULL,
+  radius_km DOUBLE PRECISION NOT NULL DEFAULT 25.0,
+  declared_at TIMESTAMPTZ DEFAULT NOW(),
+  metadata JSONB DEFAULT '{}'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS incidents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tracking_code VARCHAR(20) UNIQUE NOT NULL,
+  type VARCHAR(50) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  description TEXT NOT NULL,
+  latitude DOUBLE PRECISION NOT NULL,
+  longitude DOUBLE PRECISION NOT NULL,
+  address TEXT,
+  status VARCHAR(50) NOT NULL DEFAULT 'submitted',
+  severity VARCHAR(50) NOT NULL DEFAULT 'medium',
+  priority_score INT DEFAULT 50,
+  affected_count INT DEFAULT 1,
+  injured_count INT DEFAULT 0,
+  trapped_count INT DEFAULT 0,
+  has_children_elderly BOOLEAN DEFAULT FALSE,
+  medical_urgency BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS rescue_teams (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_code VARCHAR(50) UNIQUE NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  lead_name VARCHAR(255) NOT NULL,
+  phone VARCHAR(50),
+  current_lat DOUBLE PRECISION,
+  current_lng DOUBLE PRECISION,
+  status VARCHAR(50) NOT NULL DEFAULT 'available',
+  skills TEXT[] DEFAULT '{}',
+  capacity INT DEFAULT 4
+);
+
+CREATE TABLE IF NOT EXISTS hospitals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(255) NOT NULL,
+  latitude DOUBLE PRECISION NOT NULL,
+  longitude DOUBLE PRECISION NOT NULL,
+  address TEXT,
+  phone VARCHAR(50),
+  total_beds INT NOT NULL,
+  available_beds INT NOT NULL,
+  icu_total INT NOT NULL,
+  icu_available INT NOT NULL,
+  trauma_level INT DEFAULT 1,
+  has_helipad BOOLEAN DEFAULT FALSE,
+  status VARCHAR(50) DEFAULT 'open'
+);
+
+CREATE TABLE IF NOT EXISTS shelters (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(255) NOT NULL,
+  latitude DOUBLE PRECISION NOT NULL,
+  longitude DOUBLE PRECISION NOT NULL,
+  address TEXT,
+  capacity INT NOT NULL,
+  current_occupancy INT NOT NULL DEFAULT 0,
+  food_supplies_days INT DEFAULT 7,
+  water_supplies_days INT DEFAULT 7,
+  medical_staff_present BOOLEAN DEFAULT FALSE,
+  pet_friendly BOOLEAN DEFAULT FALSE,
+  status VARCHAR(50) DEFAULT 'open'
+);
+
+CREATE TABLE IF NOT EXISTS warehouses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(255) NOT NULL,
+  code VARCHAR(50) UNIQUE NOT NULL,
+  latitude DOUBLE PRECISION NOT NULL,
+  longitude DOUBLE PRECISION NOT NULL,
+  address TEXT,
+  contact_person VARCHAR(255),
+  phone VARCHAR(50),
+  status VARCHAR(50) DEFAULT 'open'
+);
+
+CREATE TABLE IF NOT EXISTS inventory (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  warehouse_id UUID REFERENCES warehouses(id) ON DELETE CASCADE,
+  category VARCHAR(50) NOT NULL,
+  item_name VARCHAR(255) NOT NULL,
+  unit VARCHAR(50) NOT NULL,
+  quantity_available INT NOT NULL DEFAULT 0,
+  quantity_reserved INT NOT NULL DEFAULT 0,
+  minimum_threshold INT NOT NULL DEFAULT 20,
+  status VARCHAR(50) DEFAULT 'healthy'
+);
+
+CREATE TABLE IF NOT EXISTS missions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  mission_code VARCHAR(50) UNIQUE NOT NULL,
+  incident_id UUID REFERENCES incidents(id) ON DELETE CASCADE,
+  team_id UUID REFERENCES rescue_teams(id) ON DELETE SET NULL,
+  vehicle_id UUID,
+  priority VARCHAR(50) DEFAULT 'high',
+  status VARCHAR(50) DEFAULT 'assigned',
+  objective TEXT,
+  assigned_at TIMESTAMPTZ DEFAULT NOW()
+);`;
+    navigator.clipboard.writeText(ddl);
+    setCopiedSchema(true);
+    setTimeout(() => setCopiedSchema(false), 3000);
+  };
 
   // Profile Form State
   const [fullName, setFullName] = useState('Bonnie Green');
@@ -57,6 +233,7 @@ export const WorkspaceSettingsPage: React.FC = () => {
 
   const navItems = [
     { id: 'profile', label: 'Profile', icon: UserRound },
+    { id: 'supabase', label: 'Supabase Database', icon: Database },
     { id: 'behaviour', label: 'Form behaviour', icon: SlidersHorizontal },
     { id: 'notifications', label: 'Notifications', icon: BellRing },
     { id: 'delivery', label: 'Response delivery', icon: Send },
@@ -256,6 +433,124 @@ export const WorkspaceSettingsPage: React.FC = () => {
                   </select>
                 </div>
               </div>
+            </div>
+          </section>
+
+          {/* 1.1 Supabase Cloud Database Integration Card */}
+          <section id="supabase" className="rounded-2xl border border-emerald-200/80 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_1px_3px_rgba(15,23,42,0.06)] space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 gap-2">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                    Supabase Cloud Database & Auth
+                  </h2>
+                  <p className="text-[13px] text-slate-500 mt-0.5">
+                    Live PostgreSQL backend, Row Level Security (RLS), and Realtime subscription telemetry
+                  </p>
+                </div>
+              </div>
+
+              {/* Status Badge */}
+              <div className="flex items-center gap-2">
+                <span className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
+                  supabaseStatus?.connected
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : supabaseStatus?.configured
+                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                    : 'bg-slate-100 text-slate-600 border border-slate-200'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${supabaseStatus?.connected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                  {supabaseStatus?.connected ? `Connected (${supabaseStatus.latencyMs}ms)` : 'Embedded Mode'}
+                </span>
+              </div>
+            </div>
+
+            {/* Architectural Notice */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/70 text-xs text-slate-600 space-y-1.5">
+              <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                <span>Zero-Friction Hybrid Architecture</span>
+              </div>
+              <p>
+                DisasterOS functions out-of-the-box in standalone embedded mode with reactive state, and seamlessly synchronizes with any <strong>Supabase</strong> PostgreSQL instance when project credentials are provided.
+              </p>
+            </div>
+
+            {/* Credentials Inputs */}
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-800 block mb-1">Supabase Project URL</label>
+                <input
+                  type="text"
+                  placeholder="https://xyzcompany.supabase.co"
+                  value={supabaseUrl}
+                  onChange={(e) => setSupabaseUrl(e.target.value)}
+                  className="input-field text-xs font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-800 block mb-1">Supabase Public Anon / Service Key</label>
+                <input
+                  type="password"
+                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  value={supabaseAnonKey}
+                  onChange={(e) => setSupabaseAnonKey(e.target.value)}
+                  className="input-field text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            {/* Live Feedback Toast */}
+            {supabaseFeedback && (
+              <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs font-semibold text-blue-900 flex items-center justify-between">
+                <span>{supabaseFeedback}</span>
+                <button onClick={() => setSupabaseFeedback(null)} className="text-blue-500 hover:text-blue-700">✕</button>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveSupabase}
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs"
+                >
+                  Save Credentials
+                </button>
+                <button
+                  type="button"
+                  disabled={isTestingSupabase}
+                  onClick={handleTestSupabase}
+                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isTestingSupabase ? 'animate-spin' : ''}`} />
+                  {isTestingSupabase ? 'Testing Ping...' : 'Test Connection'}
+                </button>
+                <button
+                  type="button"
+                  disabled={isSyncingSupabase}
+                  onClick={handleSyncSupabase}
+                  className="px-3.5 py-1.5 rounded-lg bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-800 text-xs font-semibold shadow-xs flex items-center gap-1.5"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  {isSyncingSupabase ? 'Syncing...' : 'Sync Local Data to Supabase'}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCopySchema}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium flex items-center gap-1.5"
+                title="Copy PostgreSQL DDL schema for Supabase SQL Editor"
+              >
+                {copiedSchema ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedSchema ? 'SQL Copied!' : 'Copy SQL Schema'}</span>
+              </button>
             </div>
           </section>
 
