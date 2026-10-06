@@ -13,7 +13,10 @@ export const NotificationToast: React.FC = () => {
         let borderClass = 'border-l-slate-900';
         let icon = <Info className="w-4 h-4 text-slate-700" />;
 
-        if (notif.severity === 'critical') {
+        if (notif.type === 'SOS_CREATED' || notif.severity === 'info' && notif.title.includes('✅')) {
+          borderClass = 'border-l-emerald-600';
+          icon = <CheckCircle2 className="w-4 h-4 text-emerald-600" />;
+        } else if (notif.severity === 'critical') {
           borderClass = 'border-l-rose-600';
           icon = <AlertTriangle className="w-4 h-4 text-rose-600" />;
         } else if (notif.severity === 'high') {

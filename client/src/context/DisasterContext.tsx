@@ -127,9 +127,9 @@ export const DisasterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const inc = payload.incident || payload;
       setIncidents((prev) => [inc, ...prev.filter((i) => i.id !== inc.id)]);
       addNotification(
-        `🚨 New Citizen SOS: #${inc.tracking_code}`,
-        `${inc.title} (Priority: ${inc.priority_score}/100)`,
-        inc.severity === 'critical' ? 'critical' : 'high',
+        `✅ Emergency SOS Transmitted: #${inc.tracking_code}`,
+        `${inc.title} · AI Priority: ${inc.priority_score}/100 (Dispatched to Responders)`,
+        'info',
         'SOS_CREATED'
       );
     });

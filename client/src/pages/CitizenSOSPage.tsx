@@ -58,6 +58,7 @@ export const CitizenSOSPage: React.FC = () => {
   const [trackingResult, setTrackingResult] = useState<any>(null);
   const [trackingCodeQuery, setTrackingCodeQuery] = useState<string>('');
   const [isTrackingLoading, setIsTrackingLoading] = useState<boolean>(false);
+  const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
 
   // Auto-detect browser GPS coordinates
   const handleDetectLocation = () => {
@@ -106,6 +107,11 @@ export const CitizenSOSPage: React.FC = () => {
       });
 
       setTrackingResult(res);
+      setShowSuccessModal(true);
+      setDescription('');
+      setTitle('');
+      setTrackingCodeQuery(res.tracking_code || res.incident?.tracking_code || '');
+      window.scrollTo({ top: 120, behavior: 'smooth' });
     } catch (err: any) {
       alert(`Submission error: ${err.message}`);
     } finally {
@@ -575,6 +581,65 @@ export const CitizenSOSPage: React.FC = () => {
         </div>
 
       </div>
+
+      {/* Emergency Distress Success Confirmation Modal */}
+      {showSuccessModal && trackingResult && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-emerald-200 p-6 max-w-lg w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+              <div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-emerald-100 text-emerald-800">
+                  SOS Signal Dispatched
+                </span>
+                <h3 className="text-base font-bold text-slate-900 mt-0.5">
+                  Emergency Help Request Received
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Your coordinates and incident description are now live on the EOC responder network.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">Incident Tracking Code:</span>
+                <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                  #{trackingResult.tracking_code || trackingResult.incident?.tracking_code}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">AI Triage Prioritization:</span>
+                <span className="font-bold text-rose-600">
+                  Score {trackingResult.priority?.priorityScore || trackingResult.incident?.priority_score}/100 ({trackingResult.incident?.severity || trackingResult.priority?.priority || 'Critical'})
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">Dispatch Status:</span>
+                <span className="font-bold text-emerald-700">
+                  Transmitted to Responders
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              <strong>Stay in a safe location:</strong> Emergency authorities and nearest swiftwater/medical taskforces have been queued for deployment. You can track rescue progress in real-time below.
+            </p>
+
+            <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSuccessModal(false)}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
+              >
+                View Live Rescue Progress &rarr;
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
