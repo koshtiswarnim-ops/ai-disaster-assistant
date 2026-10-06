@@ -9,10 +9,23 @@ import { routingService } from '../services/routingService.js';
 import { simulationEngine } from '../services/simulationEngine.js';
 import { externalApis } from '../services/externalApis.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
-import { getSupabaseConfig, testSupabaseConnection, syncStoreToSupabase, syncEntityToSupabase } from '../database/supabase.js';
+import { getSupabaseConfig, setRuntimeSupabaseConfig, testSupabaseConnection, syncStoreToSupabase, syncEntityToSupabase } from '../database/supabase.js';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'disasteros_secret_development_key_2026';
+
+// Transparently capture frontend Supabase credentials if sent via headers
+router.use((req, res, next) => {
+  const headerUrl = req.headers['x-supabase-url'];
+  const headerKey = req.headers['x-supabase-key'];
+  if (headerUrl && headerKey) {
+    const current = getSupabaseConfig();
+    if (!current.isConfigured || current.url !== headerUrl) {
+      setRuntimeSupabaseConfig(headerUrl, headerKey);
+    }
+  }
+  next();
+});
 
 // -------------------------------------------------------------
 // 1. HEALTH & SYSTEM DIAGNOSTICS (Section 44)
@@ -46,8 +59,31 @@ router.get('/supabase/status', async (req, res) => {
   });
 });
 
+router.post('/supabase/config', async (req, res) => {
+  const { url, key } = req.body;
+  if (!url || !key) {
+    return res.status(400).json({ error: 'Supabase URL and API Key are required' });
+  }
+  setRuntimeSupabaseConfig(url, key);
+  const testRes = await testSupabaseConnection(url, key);
+  
+  // Auto-sync in background if test was successful
+  if (testRes.connected) {
+    syncStoreToSupabase(store).catch(e => console.warn('[Auto-sync error]', e.message));
+  }
+  
+  res.json({
+    success: true,
+    message: 'Supabase credentials successfully saved to server environment',
+    test: testRes
+  });
+});
+
 router.post('/supabase/test', async (req, res) => {
   const { url, key } = req.body;
+  if (url && key) {
+    setRuntimeSupabaseConfig(url, key);
+  }
   const result = await testSupabaseConnection(url, key);
   res.json(result);
 });
@@ -124,7 +160,7 @@ router.get('/incidents/:id', (req, res) => {
 });
 
 // CITIZEN SOS INGRESS WORKFLOW (Connected Pipeline)
-router.post('/sos', (req, res) => {
+router.post('/sos', async (req, res) => {
   const data = req.body;
   
   // 1. AI semantic classification
@@ -154,8 +190,8 @@ router.post('/sos', (req, res) => {
     priority: priorityResult
   });
 
-  // 4.1 Sync to Supabase Cloud Database (non-blocking)
-  syncEntityToSupabase('incidents', {
+  // 4.1 Sync to Supabase Cloud Database (with resilience)
+  const sbResult = await syncEntityToSupabase('incidents', {
     id: createdIncident.id,
     tracking_code: createdIncident.tracking_code,
     type: createdIncident.type,
@@ -188,7 +224,8 @@ router.post('/sos', (req, res) => {
     message: "SOS Emergency Signal Dispatched to Command Center",
     incident: createdIncident,
     tracking_code: createdIncident.tracking_code,
-    priority: priorityResult
+    priority: priorityResult,
+    supabase: sbResult
   });
 });
 

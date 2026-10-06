@@ -48,15 +48,79 @@ export function getSupabase(): SupabaseClient | null {
 }
 
 export function configureSupabase(url: string, anonKey: string): void {
-  localStorage.setItem('disasteros_supabase_url', url.trim());
-  localStorage.setItem('disasteros_supabase_anon_key', anonKey.trim());
+  const cleanUrl = url.trim();
+  const cleanKey = anonKey.trim();
+  localStorage.setItem('disasteros_supabase_url', cleanUrl);
+  localStorage.setItem('disasteros_supabase_anon_key', cleanKey);
   supabaseClient = null; // force re-instantiation
+
+  // Forward to server asynchronously to keep backend in sync
+  fetch('/api/supabase/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: cleanUrl, key: cleanKey })
+  }).catch(err => console.warn('[Supabase Config Auto-Push Error]:', err));
 }
 
 export function clearSupabaseConfig(): void {
   localStorage.removeItem('disasteros_supabase_url');
   localStorage.removeItem('disasteros_supabase_anon_key');
   supabaseClient = null;
+}
+
+// Direct browser-to-Supabase upsert for instant guarantees
+export async function syncIncidentDirectly(incident: any): Promise<{ success: boolean; error?: string }> {
+  const sb = getSupabase();
+  if (!sb) {
+    return { success: false, error: 'Supabase client not configured in browser' };
+  }
+
+  try {
+    const payload: any = {
+      tracking_code: incident.tracking_code,
+      type: incident.type,
+      title: incident.title,
+      description: incident.description,
+      latitude: Number(incident.latitude) || 37.7749,
+      longitude: Number(incident.longitude) || -122.4194,
+      address: incident.address || 'Reported Location',
+      status: incident.status || 'submitted',
+      severity: incident.severity || 'high',
+      priority_score: Number(incident.priority_score) || 70,
+      affected_count: Number(incident.affected_count) || 1,
+      injured_count: Number(incident.injured_count) || 0,
+      trapped_count: Number(incident.trapped_count) || 0,
+      has_children_elderly: Boolean(incident.has_children_elderly),
+      medical_urgency: Boolean(incident.medical_urgency)
+    };
+
+    const isUuid = typeof incident.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(incident.id);
+    if (isUuid) {
+      payload.id = incident.id;
+    }
+
+    let { error } = await sb.from('incidents').upsert(payload, { onConflict: 'tracking_code' });
+    
+    if (error) {
+      if (error.message?.includes('type uuid')) {
+        delete payload.id;
+        const retry = await sb.from('incidents').upsert(payload, { onConflict: 'tracking_code' });
+        if (retry.error) {
+          console.warn('[Direct Supabase SOS Insert Retry Failed]', retry.error.message);
+          return { success: false, error: retry.error.message };
+        }
+        return { success: true };
+      }
+      console.warn('[Direct Supabase SOS Insert Failed]', error.message);
+      return { success: false, error: error.message };
+    }
+
+    console.log('[Direct Supabase SOS Insert Success]', incident.tracking_code);
+    return { success: true };
+  } catch (err: any) {
+    console.error('[Direct Supabase SOS Insert Exception]', err);
+    return { success: false, error: err.message };
+  }
 }
 
 export async function testSupabaseConnection(customUrl?: string, customKey?: string) {

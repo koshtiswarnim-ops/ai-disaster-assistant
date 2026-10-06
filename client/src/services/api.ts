@@ -15,6 +15,11 @@ class ApiClient {
       'x-demo-email': email
     };
 
+    const sbUrl = localStorage.getItem('disasteros_supabase_url');
+    const sbKey = localStorage.getItem('disasteros_supabase_anon_key');
+    if (sbUrl) headers['x-supabase-url'] = sbUrl;
+    if (sbKey) headers['x-supabase-key'] = sbKey;
+
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -198,6 +203,12 @@ class ApiClient {
 
   // Supabase Cloud Integration
   getSupabaseStatus() { return this.request<any>('/supabase/status'); }
+  saveSupabaseConfig(url: string, key: string) {
+    return this.request<any>('/supabase/config', {
+      method: 'POST',
+      body: JSON.stringify({ url, key })
+    });
+  }
   testSupabase(url: string, key: string) {
     return this.request<any>('/supabase/test', {
       method: 'POST',

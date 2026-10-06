@@ -100,7 +100,7 @@ class DisasterOSStore {
   }
 
   createIncident(data) {
-    const id = `inc-${Date.now().toString().slice(-4)}`;
+    const id = uuidv4();
     const tracking_code = `SOS-${Math.floor(1000 + Math.random() * 9000)}`;
     const newIncident = {
       id,

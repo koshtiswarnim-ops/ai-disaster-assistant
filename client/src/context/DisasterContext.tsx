@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
 import { socket } from '../services/socket';
+import { syncIncidentDirectly, getSupabaseConfig } from '../services/supabase';
 import { Incident, Disaster, Hospital, Shelter, Warehouse, InventoryItem, RescueTeam, Vehicle, Mission, RoadHazard, AlertNotification } from '../types';
 
 interface LiveEventNotification {
@@ -26,6 +27,8 @@ interface DisasterContextType {
   hazards: RoadHazard[];
   alerts: AlertNotification[];
   liveNotifications: LiveEventNotification[];
+  latestSOS: Incident | null;
+  setLatestSOS: (inc: Incident | null) => void;
   isLoading: boolean;
   isConnected: boolean;
   refreshData: () => Promise<void>;
@@ -40,6 +43,7 @@ const DisasterContext = createContext<DisasterContextType | undefined>(undefined
 export const DisasterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [disaster, setDisaster] = useState<Disaster | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [latestSOS, setLatestSOS] = useState<Incident | null>(null);
   const [rescueTeams, setRescueTeams] = useState<RescueTeam[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
@@ -170,8 +174,35 @@ export const DisasterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   }, [refreshData]);
 
+  // Ensure backend server is hydrated with user's Supabase credentials on startup
+  useEffect(() => {
+    const sbCfg = getSupabaseConfig();
+    if (sbCfg.isConfigured) {
+      api.saveSupabaseConfig(sbCfg.url, sbCfg.anonKey).catch(err => {
+        console.warn('[DisasterContext] Backend Supabase config init warning:', err);
+      });
+    }
+  }, []);
+
   const submitSOS = async (data: Partial<Incident>) => {
     const res = await api.submitSOS(data);
+
+    if (res?.incident) {
+      setLatestSOS(res.incident);
+      setIncidents((prev) => [res.incident, ...prev.filter((i) => i.id !== res.incident.id)]);
+      addNotification(
+        `🚨 New Citizen SOS Transmitted: #${res.incident.tracking_code}`,
+        `${res.incident.title} (GPS: ${Number(res.incident.latitude).toFixed(4)}, ${Number(res.incident.longitude).toFixed(4)})`,
+        'critical',
+        'SOS_CREATED'
+      );
+
+      // Direct browser-to-Supabase upsert for instant guarantees
+      syncIncidentDirectly(res.incident).catch(err => {
+        console.warn('[Direct Supabase SOS Mirror Error]:', err);
+      });
+    }
+
     refreshData();
     return res;
   };
@@ -202,6 +233,8 @@ export const DisasterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         hazards,
         alerts,
         liveNotifications,
+        latestSOS,
+        setLatestSOS,
         isLoading,
         isConnected,
         refreshData,
