@@ -49,13 +49,16 @@ app.use((err, req, res, next) => {
 const server = http.createServer(app);
 eventBus.initialize(server);
 
-server.listen(PORT, () => {
-  console.log(`=======================================================`);
-  console.log(`🌍 DISASTEROS ENGINE OPERATIONAL`);
-  console.log(`⚡ HTTP Server running on: http://localhost:${PORT}`);
-  console.log(`📡 WebSocket Stream active on: ws://localhost:${PORT}/ws`);
-  console.log(`🛡️  RBAC & Multi-Provider AI Architecture Ready`);
-  console.log(`=======================================================`);
-});
+if (!process.env.VERCEL) {
+  server.listen(PORT, () => {
+    console.log(`=======================================================`);
+    console.log(`🌍 DISASTEROS ENGINE OPERATIONAL`);
+    console.log(`⚡ HTTP Server running on: http://localhost:${PORT}`);
+    console.log(`📡 WebSocket Stream active on: ws://localhost:${PORT}/ws`);
+    console.log(`🛡️  RBAC & Multi-Provider AI Architecture Ready`);
+    console.log(`=======================================================`);
+  });
+}
 
+export default app;
 export { app, server };
