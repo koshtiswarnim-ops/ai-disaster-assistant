@@ -27,7 +27,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export const CommandCenterPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, setRole } = useAuth();
   const { 
     disaster, 
     incidents, 
@@ -114,30 +114,73 @@ export const CommandCenterPage: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 w-full mt-6 space-y-6">
 
-        {/* ROLE-SPECIFIC WORKSPACE: EOC CHIEF COMMANDER */}
-        {user.role === 'authority' && (
-          <div className="card-soft bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-4.5 rounded-xl shadow-md border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* ROLE-SPECIFIC WORKSPACE: OPERATOR VS CITIZEN */}
+        {user.role === 'citizen' ? (
+          <div className="card-soft bg-emerald-50/80 border-emerald-300 p-4.5 rounded-xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-600/30 border border-blue-400/40 flex items-center justify-center shrink-0">
-                <Radio className="w-5 h-5 text-blue-400 animate-pulse" />
+              <div className="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 font-bold text-lg">
+                👤
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-blue-600 text-white">
-                    Emergency Operations Chief
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-emerald-600 text-white">
+                    Citizen Mode Active
                   </span>
-                  <span className="text-xs font-mono text-slate-300">Marcus Vance · City EOC Command</span>
+                  <span className="text-xs text-emerald-900 font-semibold">Viewing Operator Command Console</span>
+                </div>
+                <h3 className="text-sm font-bold text-slate-900 mt-0.5">
+                  Need emergency assistance, evacuation help, or shelter?
+                </h3>
+                <p className="text-[11.5px] text-slate-600">
+                  This console is designed for emergency dispatchers. You can switch to the Citizen Safety Portal for 1-tap SOS distress and live tracking.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <Link
+                to="/sos"
+                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-2xs whitespace-nowrap"
+              >
+                🚨 Go to Citizen SOS
+              </Link>
+              <button
+                onClick={() => setRole('authority')}
+                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-2xs whitespace-nowrap"
+              >
+                Switch to Operator 🛡️
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="card-soft bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-4.5 rounded-xl shadow-md border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-amber-500/20 border border-amber-400/30 flex items-center justify-center shrink-0">
+                <Radio className="w-5 h-5 text-amber-400 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-amber-400 text-slate-950">
+                    OPERATOR CONSOLE
+                  </span>
+                  <span className="text-xs font-mono text-slate-300">Chief Marcus Vance · City EOC Command</span>
                 </div>
                 <h3 className="text-sm font-bold text-white mt-0.5">
                   Unified Common Operational Picture & Multi-Agency Dispatch
                 </h3>
                 <p className="text-[11.5px] text-slate-300">
-                  Full authority active to approve AI multi-factor resource allocations, issue siren broadcasts, and deploy tactical taskforces.
+                  Full operator authority active: verify citizen SOS requests, assign rescue teams, and balance hospital ICU beds.
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
+              <Link
+                to="/incidents"
+                className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-bold transition-all shadow-2xs whitespace-nowrap"
+              >
+                🚨 SOS Triage Queue
+              </Link>
               <Link
                 to="/allocation"
                 className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-2xs whitespace-nowrap"

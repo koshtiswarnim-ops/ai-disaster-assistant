@@ -3,8 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { AuthProvider } from './context/AuthContext';
 import { DisasterProvider } from './context/DisasterContext';
 import { Navbar } from './components/layout/Navbar';
-import { LiveTickerBar } from './components/layout/LiveTickerBar';
-import { RoleWorkspaceBanner } from './components/layout/RoleWorkspaceBanner';
 import { NotificationToast } from './components/layout/NotificationToast';
 
 // Pages
@@ -95,8 +93,6 @@ export default function App() {
         <DisasterProvider>
           <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col font-sans antialiased selection:bg-slate-900 selection:text-white">
             <Navbar />
-            <LiveTickerBar />
-            <RoleWorkspaceBanner />
             <main className="flex-1 flex flex-col relative overflow-hidden">
               <AnimatedRoutes />
             </main>

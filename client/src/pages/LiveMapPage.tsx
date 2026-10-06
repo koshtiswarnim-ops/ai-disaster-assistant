@@ -8,7 +8,7 @@ import { Incident } from '../types';
 import { MapPin, Layers, Radio, Shield, Activity, Home, Boxes, AlertTriangle } from 'lucide-react';
 
 export const LiveMapPage: React.FC = () => {
-  const { incidents, rescueTeams, hospitals, shelters, warehouses, hazards, disaster } = useDisaster();
+  const { incidents, rescueTeams, hospitals, shelters, warehouses, hazards, disaster, latestSOS } = useDisaster();
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [allocationIncident, setAllocationIncident] = useState<Incident | null>(null);
 
@@ -25,6 +25,27 @@ export const LiveMapPage: React.FC = () => {
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 w-full mt-6 space-y-4">
+        {/* Latest Active SOS Live Alert Bar */}
+        {latestSOS && (
+          <div className="bg-rose-50 border border-rose-300 p-3 rounded-xl flex items-center justify-between gap-3 text-xs shadow-xs animate-in fade-in">
+            <div className="flex items-center gap-2.5 truncate">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping shrink-0" />
+              <span className="font-bold text-rose-900">
+                LATEST LIVE CITIZEN SOS: #{latestSOS.tracking_code}
+              </span>
+              <span className="text-rose-700 truncate">
+                · {latestSOS.title} (GPS: {Number(latestSOS.latitude).toFixed(4)}, {Number(latestSOS.longitude).toFixed(4)})
+              </span>
+            </div>
+            <button
+              onClick={() => setSelectedIncident(latestSOS)}
+              className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg shadow-xs shrink-0 transition-colors"
+            >
+              🎯 Focus on Map
+            </button>
+          </div>
+        )}
+
         {/* Quick summary stats banner */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           <div className="bg-white border border-slate-200 p-3 rounded flex items-center gap-3">
@@ -81,7 +102,7 @@ export const LiveMapPage: React.FC = () => {
         {/* Full Interactive Map */}
         <DisasterMap
           height="680px"
-          selectedIncident={selectedIncident}
+          selectedIncident={selectedIncident || latestSOS}
           onSelectIncident={(inc) => setSelectedIncident(inc)}
         />
       </div>

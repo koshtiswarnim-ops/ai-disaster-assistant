@@ -1,12 +1,12 @@
 // DisasterOS Interactive Emergency Operations Map
-import React, { useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polygon, Polyline } from 'react-leaflet';
+import React, { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polygon, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { useDisaster } from '../../context/DisasterContext';
 import { Incident, Hospital, Shelter, RescueTeam, Warehouse, RoadHazard } from '../../types';
 import { PriorityBadge } from '../common/PriorityBadge';
 import { StatusBadge } from '../common/StatusBadge';
-import { Filter, Eye, Navigation, AlertOctagon } from 'lucide-react';
+import { Filter, Eye, Navigation, AlertOctagon, LocateFixed, Sparkles, MapPin } from 'lucide-react';
 
 // Custom SVG Leaflet Markers
 const createIcon = (bg: string, emoji: string, ring = 'ring-white') => {
@@ -18,6 +18,28 @@ const createIcon = (bg: string, emoji: string, ring = 'ring-white') => {
     iconSize: [32, 32],
     iconAnchor: [16, 16],
     popupAnchor: [0, -18]
+  });
+};
+
+// Specialized Animated Pulsing Radar Marker for Real Working SOS Signals
+const createPulsingSOSIcon = (trackingCode: string, isLatest = false) => {
+  return L.divIcon({
+    className: 'pulsing-sos-leaflet-marker',
+    html: `
+      <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px;">
+        <div style="position: absolute; width: 44px; height: 44px; border-radius: 9999px; background-color: #f43f5e; opacity: 0.6; animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+        <div style="position: absolute; width: 34px; height: 34px; border-radius: 9999px; background-color: #e11d48; opacity: 0.9; box-shadow: 0 0 16px #e11d48;"></div>
+        <div style="position: relative; width: 28px; height: 28px; border-radius: 9999px; background-color: #be123c; color: white; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; border: 2px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+          🚨
+        </div>
+        <div style="position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); background-color: #0f172a; color: white; font-size: 10px; font-family: monospace; font-weight: 700; padding: 2px 6px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.4); white-space: nowrap; border: 1px solid #334155;">
+          #${trackingCode || 'SOS'}
+        </div>
+      </div>
+    `,
+    iconSize: [44, 44],
+    iconAnchor: [22, 22],
+    popupAnchor: [0, -22]
   });
 };
 
@@ -33,20 +55,82 @@ const icons = {
   hazard: createIcon('#991b1b', '⛔', 'ring-red-400')
 };
 
+// Leaflet Map Controller to dynamically fly to target coordinates or incidents
+function MapViewController({ 
+  targetCenter, 
+  targetZoom,
+  selectedIncident,
+  latestSOS
+}: { 
+  targetCenter?: [number, number]; 
+  targetZoom?: number;
+  selectedIncident?: Incident | null;
+  latestSOS?: Incident | null;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    const focusTarget = selectedIncident || latestSOS;
+    if (focusTarget && Number.isFinite(focusTarget.latitude) && Number.isFinite(focusTarget.longitude)) {
+      map.flyTo([Number(focusTarget.latitude), Number(focusTarget.longitude)], 15, {
+        animate: true,
+        duration: 1.2
+      });
+    } else if (targetCenter && Number.isFinite(targetCenter[0]) && Number.isFinite(targetCenter[1])) {
+      map.flyTo(targetCenter, targetZoom || map.getZoom(), {
+        animate: true,
+        duration: 1.0
+      });
+    }
+  }, [selectedIncident, latestSOS, targetCenter, targetZoom, map]);
+
+  return null;
+}
+
+// Leaflet Map Event Listener for Click-to-Pin coordinates
+function MapClickHandler({ 
+  onLocationSelect 
+}: { 
+  onLocationSelect?: (lat: number, lng: number) => void 
+}) {
+  useMapEvents({
+    click(e) {
+      if (onLocationSelect) {
+        onLocationSelect(Number(e.latlng.lat.toFixed(4)), Number(e.latlng.lng.toFixed(4)));
+      }
+    }
+  });
+  return null;
+}
+
 interface DisasterMapProps {
   height?: string;
   selectedIncident?: Incident | null;
   onSelectIncident?: (incident: Incident) => void;
   activeRoutePolyline?: [number, number][];
+  centerCoordinates?: [number, number];
+  zoomLevel?: number;
+  enableMapClick?: boolean;
+  onLocationSelect?: (lat: number, lng: number) => void;
+  previewLocation?: [number, number] | null;
+  previewLabel?: string;
+  showFocusControls?: boolean;
 }
 
 export const DisasterMap: React.FC<DisasterMapProps> = ({
   height = '560px',
   selectedIncident,
   onSelectIncident,
-  activeRoutePolyline
+  activeRoutePolyline,
+  centerCoordinates,
+  zoomLevel = 13,
+  enableMapClick = false,
+  onLocationSelect,
+  previewLocation,
+  previewLabel,
+  showFocusControls = true
 }) => {
-  const { incidents, hospitals, shelters, rescueTeams, warehouses, hazards, disaster } = useDisaster();
+  const { incidents, hospitals, shelters, rescueTeams, warehouses, hazards, disaster, latestSOS } = useDisaster();
 
   const [layers, setLayers] = useState({
     incidents: true,
@@ -62,7 +146,9 @@ export const DisasterMap: React.FC<DisasterMapProps> = ({
     setLayers(prev => ({ ...prev, [layerKey]: !prev[layerKey] }));
   };
 
-  const center: [number, number] = [37.7749, -122.4194];
+  // Determine initial center: prefer preview location, latest SOS, selected incident, custom coordinates, or fallback default
+  const activeFocus = previewLocation || (latestSOS ? [Number(latestSOS.latitude), Number(latestSOS.longitude)] : null);
+  const defaultCenter: [number, number] = centerCoordinates || activeFocus || [37.7749, -122.4194];
 
   // Flood zone polygon coordinates
   const floodZoneA: [number, number][] = [
@@ -84,10 +170,10 @@ export const DisasterMap: React.FC<DisasterMapProps> = ({
         <button
           onClick={() => toggleLayer('incidents')}
           className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
-            layers.incidents ? 'bg-blue-50 text-blue-700 border border-blue-200/60' : 'text-slate-500 hover:bg-slate-50'
+            layers.incidents ? 'bg-rose-50 text-rose-700 border border-rose-200/60 font-bold' : 'text-slate-500 hover:bg-slate-50'
           }`}
         >
-          Incidents ({incidents.length})
+          🚨 SOS Incidents ({incidents.length})
         </button>
         <button
           onClick={() => toggleLayer('teams')}
@@ -123,14 +209,51 @@ export const DisasterMap: React.FC<DisasterMapProps> = ({
         </button>
       </div>
 
+      {/* Top Right Quick-Focus Controls */}
+      {showFocusControls && (
+        <div className="absolute top-3 right-3 z-[1000] flex items-center gap-1.5">
+          {latestSOS && (
+            <button
+              onClick={() => {
+                if (onSelectIncident) {
+                  onSelectIncident(latestSOS);
+                }
+              }}
+              className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-md border border-rose-400 flex items-center gap-1.5 transition-all"
+              title="Fly map directly to newest reported SOS"
+            >
+              <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+              <span>Focus Latest SOS (#{latestSOS.tracking_code})</span>
+            </button>
+          )}
+
+          {enableMapClick && (
+            <span className="hidden sm:inline-block bg-slate-900/90 text-white text-[11px] font-medium px-2.5 py-1.5 rounded-xl shadow backdrop-blur-md">
+              📍 Click map to pin location
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Main Leaflet Map */}
       <div style={{ height }}>
         <MapContainer
-          center={center}
-          zoom={13}
+          center={defaultCenter}
+          zoom={zoomLevel}
           scrollWheelZoom={true}
           style={{ width: '100%', height: '100%' }}
         >
+          {/* Dynamic Map Camera Controller */}
+          <MapViewController 
+            targetCenter={centerCoordinates || previewLocation || undefined} 
+            targetZoom={zoomLevel}
+            selectedIncident={selectedIncident}
+            latestSOS={latestSOS}
+          />
+
+          {/* Click Handler if active */}
+          {enableMapClick && <MapClickHandler onLocationSelect={onLocationSelect} />}
+
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -169,6 +292,19 @@ export const DisasterMap: React.FC<DisasterMapProps> = ({
             />
           )}
 
+          {/* Pinned Preview Location Marker (for Citizen SOS location picker) */}
+          {previewLocation && (
+            <Marker position={previewLocation} icon={createPulsingSOSIcon('PIN', true)}>
+              <Popup>
+                <div className="p-1 text-xs">
+                  <span className="font-bold text-rose-600 uppercase text-[10px]">SELECTED SOS LOCATION</span>
+                  <p className="font-semibold text-slate-900 mt-0.5">{previewLabel || 'Pinned Emergency Distress Location'}</p>
+                  <p className="font-mono text-[11px] text-slate-500 mt-0.5">{previewLocation[0].toFixed(4)}, {previewLocation[1].toFixed(4)}</p>
+                </div>
+              </Popup>
+            </Marker>
+          )}
+
           {/* Road Hazards */}
           {layers.hazards && hazards.map(h => (
             <Marker key={h.id} position={[h.latitude, h.longitude]} icon={icons.hazard}>
@@ -182,17 +318,27 @@ export const DisasterMap: React.FC<DisasterMapProps> = ({
             </Marker>
           ))}
 
-          {/* Incidents Markers */}
+          {/* Live Working Incidents / SOS Distress Markers */}
           {layers.incidents && incidents.map(inc => {
+            const isLatest = latestSOS && (latestSOS.id === inc.id || latestSOS.tracking_code === inc.tracking_code);
+            const isSelected = selectedIncident && (selectedIncident.id === inc.id || selectedIncident.tracking_code === inc.tracking_code);
+
+            // If it is the latest SOS or selected incident, render the animated pulsing radar beacon
             let icon = icons.medium;
-            if (inc.severity === 'critical') icon = icons.critical;
-            else if (inc.severity === 'high') icon = icons.high;
-            else if (inc.status === 'resolved') icon = icons.resolved;
+            if (isLatest || isSelected) {
+              icon = createPulsingSOSIcon(inc.tracking_code, true);
+            } else if (inc.severity === 'critical') {
+              icon = createPulsingSOSIcon(inc.tracking_code, false);
+            } else if (inc.severity === 'high') {
+              icon = icons.high;
+            } else if (inc.status === 'resolved') {
+              icon = icons.resolved;
+            }
 
             return (
               <Marker
-                key={inc.id}
-                position={[inc.latitude, inc.longitude]}
+                key={inc.id || inc.tracking_code}
+                position={[Number(inc.latitude), Number(inc.longitude)]}
                 icon={icon}
                 eventHandlers={{
                   click: () => onSelectIncident && onSelectIncident(inc)
@@ -202,12 +348,17 @@ export const DisasterMap: React.FC<DisasterMapProps> = ({
                   <div className="p-1 max-w-xs text-xs space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <PriorityBadge priority={inc.severity} score={inc.priority_score} />
-                      <span className="font-mono text-[10px] text-slate-400">#{inc.tracking_code}</span>
+                      <span className="font-mono text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                        #{inc.tracking_code}
+                      </span>
                     </div>
                     <h4 className="font-bold text-slate-900 text-sm leading-tight">{inc.title}</h4>
                     <p className="text-slate-600 line-clamp-2">{inc.description}</p>
+                    <div className="text-[11px] font-mono text-slate-500">
+                      GPS: {Number(inc.latitude).toFixed(4)}, {Number(inc.longitude).toFixed(4)}
+                    </div>
                     <div className="pt-1 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                      <span>Status: <strong className="text-slate-800">{inc.status}</strong></span>
+                      <span>Status: <strong className="text-slate-800 capitalize">{inc.status}</strong></span>
                       {onSelectIncident && (
                         <button
                           onClick={() => onSelectIncident(inc)}
@@ -225,7 +376,7 @@ export const DisasterMap: React.FC<DisasterMapProps> = ({
 
           {/* Rescue Teams */}
           {layers.teams && rescueTeams.map(t => (
-            <Marker key={t.id} position={[t.current_lat, t.current_lng]} icon={icons.team}>
+            <Marker key={t.id} position={[Number(t.current_lat), Number(t.current_lng)]} icon={icons.team}>
               <Popup>
                 <div className="p-1 text-xs space-y-1">
                   <span className="text-[10px] uppercase font-bold text-sky-700">RESCUE TASKFORCE</span>
@@ -233,7 +384,7 @@ export const DisasterMap: React.FC<DisasterMapProps> = ({
                   <StatusBadge status={t.status} />
                   <p className="text-slate-500 text-[11px]">Lead: {t.lead_name} · {t.phone}</p>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {t.skills.map(s => (
+                    {t.skills?.map(s => (
                       <span key={s} className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] text-slate-700">{s}</span>
                     ))}
                   </div>
@@ -244,7 +395,7 @@ export const DisasterMap: React.FC<DisasterMapProps> = ({
 
           {/* Hospitals */}
           {layers.hospitals && hospitals.map(h => (
-            <Marker key={h.id} position={[h.latitude, h.longitude]} icon={icons.hospital}>
+            <Marker key={h.id} position={[Number(h.latitude), Number(h.longitude)]} icon={icons.hospital}>
               <Popup>
                 <div className="p-1 text-xs space-y-1">
                   <span className="text-[10px] uppercase font-bold text-red-600">TRAUMA CENTER</span>
@@ -261,7 +412,7 @@ export const DisasterMap: React.FC<DisasterMapProps> = ({
 
           {/* Shelters */}
           {layers.shelters && shelters.map(s => (
-            <Marker key={s.id} position={[s.latitude, s.longitude]} icon={icons.shelter}>
+            <Marker key={s.id} position={[Number(s.latitude), Number(s.longitude)]} icon={icons.shelter}>
               <Popup>
                 <div className="p-1 text-xs space-y-1">
                   <span className="text-[10px] uppercase font-bold text-emerald-700">EVACUATION REFUGE</span>
@@ -277,7 +428,7 @@ export const DisasterMap: React.FC<DisasterMapProps> = ({
 
           {/* Warehouses */}
           {layers.warehouses && warehouses.map(w => (
-            <Marker key={w.id} position={[w.latitude, w.longitude]} icon={icons.warehouse}>
+            <Marker key={w.id} position={[Number(w.latitude), Number(w.longitude)]} icon={icons.warehouse}>
               <Popup>
                 <div className="p-1 text-xs space-y-1">
                   <span className="text-[10px] uppercase font-bold text-slate-600">SUPPLY DEPOT</span>

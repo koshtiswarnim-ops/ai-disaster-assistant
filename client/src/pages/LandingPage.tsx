@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   ShieldAlert, 
   Radio, 
@@ -19,9 +19,11 @@ import {
   Wind,
   Clock,
   Sparkles,
-  LifeBuoy
+  LifeBuoy,
+  User
 } from 'lucide-react';
 import { useDisaster } from '../context/DisasterContext';
+import { useAuth } from '../context/AuthContext';
 
 interface DisasterDemoScenario {
   id: string;
@@ -103,6 +105,8 @@ const DEMO_SCENARIOS: Record<string, DisasterDemoScenario> = {
 };
 
 export const LandingPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { setRole } = useAuth();
   const { disaster, incidents, rescueTeams, hospitals } = useDisaster();
   const [selectedDisasterKey, setSelectedDisasterKey] = useState<string>('flood');
   const activeScenario = DEMO_SCENARIOS[selectedDisasterKey];
@@ -111,7 +115,7 @@ export const LandingPage: React.FC = () => {
     <div className="min-h-screen bg-[#f8fafc] flex flex-col">
       
       {/* Hero Section */}
-      <section className="relative pt-12 pb-12 sm:pt-16 sm:pb-16 border-b border-slate-200/80 bg-white">
+      <section className="relative pt-10 pb-12 sm:pt-14 sm:pb-16 border-b border-slate-200/80 bg-white">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center">
           
           {/* Eyebrow */}
@@ -128,11 +132,128 @@ export const LandingPage: React.FC = () => {
           {/* Plain-Language Subtitle */}
           <p className="mt-3 text-sm sm:text-base text-slate-600 max-w-2xl mx-auto leading-relaxed font-normal animate-slide-up">
             During disasters like <strong>floods, earthquakes, fires, and extreme weather</strong>, people lack timely and location-specific information. 
-            DisasterOS analyzes real-time data, delivers predictive early warnings, pinpoints high-risk areas, and powers faster emergency response.
+            DisasterOS provides two distinct, purpose-built workspaces: one for <strong>Citizens in danger</strong> and one for <strong>Emergency Operators & Authorities</strong>.
           </p>
 
+          {/* TWO DISTINCT WORKSPACES: CITIZEN VS OPERATOR */}
+          <div className="mt-8 max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4 text-left animate-slide-up">
+            
+            {/* Citizen Safety Portal Card */}
+            <div className="relative p-5 rounded-2xl border-2 border-emerald-300 bg-gradient-to-b from-emerald-50/70 to-white shadow-xs hover:shadow-md transition-all group flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-600 text-white shadow-2xs">
+                    <span>👤</span>
+                    <span>CITIZEN PORTAL</span>
+                  </span>
+                  <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
+                    For Evacuees & Public
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">
+                    Citizen Public Safety Portal
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    Need immediate emergency rescue, live responder ETA, or safe refuge?
+                  </p>
+                </div>
+
+                <ul className="text-xs space-y-2 text-slate-700 pt-1">
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0" />
+                    <span><strong>1-Tap GPS Distress SOS:</strong> Instant location reporting to 911/EOC</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                    <span><strong>Live Rescuer Tracking:</strong> Real-time ETA of dispatched rescue team</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                    <span><strong>Shelters & Evacuation Routes:</strong> Find food, potable water & beds</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1.5 shrink-0" />
+                    <span><strong>AI Safety Assistant:</strong> Step-by-step guidance during crisis</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="pt-4 mt-4 border-t border-emerald-100">
+                <button
+                  onClick={() => {
+                    setRole('citizen');
+                    navigate('/sos');
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all group-hover:scale-[1.01]"
+                >
+                  <span>Launch Citizen Safety Portal 👤</span>
+                  <ArrowRight className="w-4 h-4 text-emerald-200" />
+                </button>
+              </div>
+            </div>
+
+            {/* Operator Command Console Card */}
+            <div className="relative p-5 rounded-2xl border-2 border-slate-700 bg-gradient-to-b from-slate-900 to-slate-950 text-white shadow-xs hover:shadow-md transition-all group flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-400 text-slate-950 shadow-2xs">
+                    <span>🛡️</span>
+                    <span>OPERATOR CONSOLE</span>
+                  </span>
+                  <span className="text-[11px] font-mono text-amber-300 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                    For EOC & Dispatchers
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="text-base font-bold text-white group-hover:text-amber-300 transition-colors">
+                    Operator Command Console
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                    Managing citywide disaster operations, triage queues, and multi-agency units?
+                  </p>
+                </div>
+
+                <ul className="text-xs space-y-2 text-slate-300 pt-1">
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                    <span><strong>Citizen SOS Triage Queue:</strong> AI severity score (0-100) & verification</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" />
+                    <span><strong>Multi-Agency Dispatch:</strong> Deploy Swiftwater boat teams & USAR squads</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400 mt-1.5 shrink-0" />
+                    <span><strong>Hospital ICU & Beds:</strong> Real-time divert & capacity balancing</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+                    <span><strong>Broadcast Emergency Sirens:</strong> Trigger alerts across all risk zones</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="pt-4 mt-4 border-t border-slate-800">
+                <button
+                  onClick={() => {
+                    setRole('authority');
+                    navigate('/command-center');
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all group-hover:scale-[1.01]"
+                >
+                  <span>Launch Operator Console 🛡️</span>
+                  <ArrowRight className="w-4 h-4 text-slate-950" />
+                </button>
+              </div>
+            </div>
+
+          </div>
+
           {/* Quick Metrics Bar */}
-          <div className="mt-6 max-w-2xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono text-xs animate-slide-up">
+          <div className="mt-8 max-w-2xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono text-xs animate-slide-up">
             <div className="p-2 rounded bg-slate-50 border border-slate-200">
               <span className="text-[10px] text-slate-400 uppercase block">AI Triage Speed</span>
               <strong className="text-slate-900 font-bold text-sm">0.4s</strong>
@@ -149,42 +270,6 @@ export const LandingPage: React.FC = () => {
               <span className="text-[10px] text-slate-400 uppercase block">Dispatch Reduction</span>
               <strong className="text-purple-700 font-bold text-sm">&lt; 4 mins</strong>
             </div>
-          </div>
-
-          {/* Quick Navigation Action Buttons */}
-          <div className="mt-7 flex flex-wrap items-center justify-center gap-3 animate-slide-up">
-            <Link
-              to="/ai-assistant"
-              className="px-5 py-2.5 rounded bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs shadow-xs flex items-center gap-2 transition-all hover:translate-y-[-1px] interactive-hover-lift"
-            >
-              <Bot className="w-4 h-4 text-blue-200" />
-              <span>Open AI Disaster Assistant</span>
-              <ArrowRight className="w-3.5 h-3.5 text-blue-200" />
-            </Link>
-
-            <Link
-              to="/risk-analysis"
-              className="px-4 py-2.5 rounded bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-medium text-xs shadow-xs flex items-center gap-2 transition-all hover:translate-y-[-1px] interactive-hover-lift"
-            >
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-              <span>Early Warnings & Risk Zones</span>
-            </Link>
-
-            <Link
-              to="/sos"
-              className="px-4 py-2.5 rounded bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-medium text-xs shadow-xs flex items-center gap-2 transition-all hover:translate-y-[-1px] interactive-hover-lift"
-            >
-              <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
-              <span>Citizen SOS (One-Tap)</span>
-            </Link>
-
-            <Link
-              to="/command-center"
-              className="px-4 py-2.5 rounded text-slate-600 hover:text-slate-900 font-medium text-xs flex items-center gap-1.5 transition-colors interactive-hover-lift"
-            >
-              <Radio className="w-3.5 h-3.5 text-slate-500" />
-              <span>Command Center</span>
-            </Link>
           </div>
 
         </div>

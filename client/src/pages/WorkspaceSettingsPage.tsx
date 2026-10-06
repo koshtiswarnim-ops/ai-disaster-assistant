@@ -39,6 +39,7 @@ export const WorkspaceSettingsPage: React.FC = () => {
   const [isSyncingSupabase, setIsSyncingSupabase] = useState<boolean>(false);
   const [supabaseFeedback, setSupabaseFeedback] = useState<string | null>(null);
   const [copiedSchema, setCopiedSchema] = useState<boolean>(false);
+  const [copiedRlsSql, setCopiedRlsSql] = useState<boolean>(false);
 
   useEffect(() => {
     api.getSupabaseStatus().then(res => setSupabaseStatus(res)).catch(() => {});
@@ -58,10 +59,21 @@ export const WorkspaceSettingsPage: React.FC = () => {
     }
   };
 
-  const handleSaveSupabase = () => {
+  const handleSaveSupabase = async () => {
     configureSupabase(supabaseUrl, supabaseAnonKey);
-    setSupabaseFeedback('Supabase credentials stored in browser session.');
-    setTimeout(() => setSupabaseFeedback(null), 4000);
+    setSupabaseFeedback('Saving credentials to browser and server environment...');
+    try {
+      const res = await api.saveSupabaseConfig(supabaseUrl, supabaseAnonKey);
+      if (res.test?.connected) {
+        setSupabaseStatus(res.test);
+        setSupabaseFeedback('Supabase connected! Credentials saved to server .env.');
+      } else {
+        setSupabaseFeedback(res.test?.message || 'Credentials saved to server .env.');
+      }
+    } catch (err: any) {
+      setSupabaseFeedback(`Saved to browser. Server error: ${err.message}`);
+    }
+    setTimeout(() => setSupabaseFeedback(null), 5000);
   };
 
   const handleSyncSupabase = async () => {
@@ -193,10 +205,34 @@ CREATE TABLE IF NOT EXISTS missions (
   status VARCHAR(50) DEFAULT 'assigned',
   objective TEXT,
   assigned_at TIMESTAMPTZ DEFAULT NOW()
-);`;
+);
+
+-- Ensure public anon role can access all tables freely (matches incidents)
+ALTER TABLE IF EXISTS public.disasters DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.hospitals DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.rescue_teams DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.shelters DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.warehouses DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.missions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.inventory DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.incidents DISABLE ROW LEVEL SECURITY;`;
     navigator.clipboard.writeText(ddl);
     setCopiedSchema(true);
     setTimeout(() => setCopiedSchema(false), 3000);
+  };
+
+  const handleCopyFixRlsSql = () => {
+    const sql = `-- UNLOCK ALL 7 DISASTEROS SUPABASE TABLES (Disable RLS matching incidents)
+ALTER TABLE IF EXISTS public.disasters DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.hospitals DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.rescue_teams DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.shelters DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.warehouses DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.missions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.incidents DISABLE ROW LEVEL SECURITY;`;
+    navigator.clipboard.writeText(sql);
+    setCopiedRlsSql(true);
+    setTimeout(() => setCopiedRlsSql(false), 3000);
   };
 
   // Profile Form State
@@ -542,15 +578,27 @@ CREATE TABLE IF NOT EXISTS missions (
                 </button>
               </div>
 
-              <button
-                type="button"
-                onClick={handleCopySchema}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium flex items-center gap-1.5"
-                title="Copy PostgreSQL DDL schema for Supabase SQL Editor"
-              >
-                {copiedSchema ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedSchema ? 'SQL Copied!' : 'Copy SQL Schema'}</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyFixRlsSql}
+                  className="px-3.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold shadow-xs flex items-center gap-1.5"
+                  title="Copy SQL to unlock all tables in Supabase SQL editor"
+                >
+                  {copiedRlsSql ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Sparkles className="w-3.5 h-3.5 text-amber-600" />}
+                  <span>{copiedRlsSql ? 'SQL Copied!' : 'Copy SQL to Unlock All Tables (RLS Fix)'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCopySchema}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium flex items-center gap-1.5"
+                  title="Copy full PostgreSQL DDL schema"
+                >
+                  {copiedSchema ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedSchema ? 'SQL Copied!' : 'Copy Schema'}</span>
+                </button>
+              </div>
             </div>
           </section>
 

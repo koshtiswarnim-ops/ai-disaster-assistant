@@ -25,6 +25,7 @@ import {
   LifeBuoy
 } from 'lucide-react';
 import { api } from '../services/api';
+import { DisasterMap } from '../components/map/DisasterMap';
 
 const EMERGENCY_TYPES = [
   { id: 'flood', label: 'Flash Flood / Rising Water', icon: Waves },
@@ -37,7 +38,7 @@ const EMERGENCY_TYPES = [
 
 export const CitizenSOSPage: React.FC = () => {
   const { submitSOS } = useDisaster();
-  const { user } = useAuth();
+  const { user, setRole } = useAuth();
 
   // Form State
   const [selectedType, setSelectedType] = useState<string>('flood');
@@ -162,40 +163,50 @@ export const CitizenSOSPage: React.FC = () => {
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 w-full mt-6 space-y-6">
 
-        {/* ROLE-SPECIFIC WORKSPACE: CITIZEN EVACUEE */}
-        {user.role === 'citizen' && (
-          <div className="card-soft bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-white border-blue-200/80 p-5 shadow-sm space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-blue-600 text-white">
-                    Citizen Emergency Transmitter
-                  </span>
-                  <span className="text-xs font-bold text-blue-900">Sarah Lin (Resident)</span>
-                </div>
-                <h3 className="text-sm font-bold text-slate-900">
-                  Priority Distress Link to EOC Search & Rescue
-                </h3>
-                <p className="text-xs text-slate-600">
-                  Transmitting from Waterfront Marina Sector. GPS coordinates lock automatically to nearest emergency dispatch team.
-                </p>
+        {/* ROLE-SPECIFIC WORKSPACE: CITIZEN SAFETY PORTAL */}
+        <div className="card-soft bg-gradient-to-r from-emerald-500/15 via-emerald-500/5 to-white border-emerald-300 p-5 shadow-xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-emerald-600 text-white shadow-2xs">
+                  CITIZEN PUBLIC SAFETY PORTAL
+                </span>
+                <span className="text-xs font-bold text-emerald-950">
+                  {user.role === 'citizen' ? 'Sarah Lin (Evacuee / Resident)' : `${user.fullName} (${user.role})`}
+                </span>
               </div>
-
-              <div className="flex items-center gap-2">
-                <Link
-                  to="/shelters"
-                  className="px-3 py-1.5 rounded-lg bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-xs font-bold shadow-2xs"
-                >
-                  Nearby Shelters
-                </Link>
-                <Link
-                  to="/hospitals"
-                  className="px-3 py-1.5 rounded-lg bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 text-xs font-bold shadow-2xs"
-                >
-                  Nearby Hospitals
-                </Link>
-              </div>
+              <h3 className="text-sm font-bold text-slate-900">
+                Priority Distress Link to EOC Search & Rescue
+              </h3>
+              <p className="text-xs text-slate-600">
+                Transmitting directly to municipal emergency dispatchers. GPS coordinates lock automatically to dispatch the closest rescue boat or ambulance.
+              </p>
             </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {user.role !== 'citizen' && (
+                <button
+                  type="button"
+                  onClick={() => setRole('citizen')}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-2xs"
+                >
+                  Activate Citizen Mode 👤
+                </button>
+              )}
+              <Link
+                to="/shelters"
+                className="px-3 py-1.5 rounded-lg bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-800 text-xs font-bold shadow-2xs"
+              >
+                Nearby Shelters
+              </Link>
+              <Link
+                to="/hospitals"
+                className="px-3 py-1.5 rounded-lg bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 text-xs font-bold shadow-2xs"
+              >
+                Nearby Hospitals
+              </Link>
+            </div>
+          </div>
 
             {/* Instant Emergency Preset Buttons */}
             <div className="pt-2 border-t border-blue-200/60 flex flex-wrap items-center gap-2 text-xs">
@@ -243,7 +254,6 @@ export const CitizenSOSPage: React.FC = () => {
               </button>
             </div>
           </div>
-        )}
 
         {/* Top Tracking Card / Query Bar */}
         <div className="bg-white border border-slate-200 p-4 rounded flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -349,6 +359,40 @@ export const CitizenSOSPage: React.FC = () => {
                   <span className="text-emerald-700 uppercase font-semibold">Status: {trackingResult.mission.status}</span>
                 </div>
               )}
+            </div>
+
+            {/* Live Operational Map with Pulsing Distress Beacon */}
+            <div className="rounded-xl border border-slate-200 overflow-hidden shadow-xs bg-white mt-3">
+              <div className="bg-slate-900 text-white px-3.5 py-2 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 font-bold text-amber-300">
+                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                  <span>Real-Time EOC Map — SOS Signal Active at Marked Coordinates</span>
+                </div>
+                <span className="font-mono text-xs text-slate-300">
+                  #{trackingResult.tracking_code || trackingResult.incident?.tracking_code}
+                </span>
+              </div>
+              <div className="p-1.5">
+                <DisasterMap
+                  height="340px"
+                  selectedIncident={trackingResult.incident || {
+                    id: trackingResult.tracking_code,
+                    tracking_code: trackingResult.tracking_code,
+                    title: trackingResult.incident?.title || 'Emergency Request',
+                    description: trackingResult.incident?.description || '',
+                    latitude: Number(trackingResult.incident?.latitude || latitude),
+                    longitude: Number(trackingResult.incident?.longitude || longitude),
+                    severity: trackingResult.incident?.severity || 'critical',
+                    priority_score: trackingResult.incident?.priority_score || 90,
+                    status: trackingResult.incident?.status || 'submitted'
+                  }}
+                  centerCoordinates={[
+                    Number(trackingResult.incident?.latitude || latitude),
+                    Number(trackingResult.incident?.longitude || longitude)
+                  ]}
+                  zoomLevel={15}
+                />
+              </div>
             </div>
 
             <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
@@ -493,6 +537,45 @@ export const CitizenSOSPage: React.FC = () => {
                     onChange={(e) => setLongitude(Number(e.target.value))}
                     className="input-field font-mono text-xs py-1"
                   />
+                </div>
+              </div>
+
+              {/* Interactive Live Location Pinning Map */}
+              <div className="mt-3 rounded-xl border border-rose-200 overflow-hidden bg-slate-50 shadow-xs">
+                <div className="bg-rose-50/90 px-3 py-1.5 border-b border-rose-200/80 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-rose-900">
+                    <MapPin className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Pinpoint Emergency Distress Location (Click map to move pin)</span>
+                  </div>
+                  <span className="text-[11px] font-mono text-rose-700 font-bold">
+                    {latitude.toFixed(4)}, {longitude.toFixed(4)}
+                  </span>
+                </div>
+                <div className="p-1 bg-white">
+                  <DisasterMap
+                    height="240px"
+                    enableMapClick={true}
+                    centerCoordinates={[latitude, longitude]}
+                    zoomLevel={14}
+                    previewLocation={[latitude, longitude]}
+                    previewLabel={address || 'Pinned SOS Distress Location'}
+                    showFocusControls={false}
+                    onLocationSelect={(lat, lng) => {
+                      setLatitude(lat);
+                      setLongitude(lng);
+                      setAddress((prev) => prev || `Pinned Map Coordinates (${lat}, ${lng})`);
+                    }}
+                  />
+                </div>
+                <div className="px-3 py-1 bg-slate-50 border-t border-slate-200/80 text-[10.5px] text-slate-500 flex items-center justify-between">
+                  <span>📍 Click anywhere on the map to set your distress coordinates.</span>
+                  <button
+                    type="button"
+                    onClick={handleDetectLocation}
+                    className="text-blue-600 hover:text-blue-800 font-semibold"
+                  >
+                    Auto-GPS
+                  </button>
                 </div>
               </div>
             </div>
