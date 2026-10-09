@@ -132,6 +132,9 @@ export const DisasterMap: React.FC<DisasterMapProps> = ({
 }) => {
   const { incidents, hospitals, shelters, rescueTeams, warehouses, hazards, disaster, latestSOS } = useDisaster();
 
+  // Map Tile Mode: Streets, Satellite Imagery, or Hybrid
+  const [mapMode, setMapMode] = useState<'streets' | 'satellite' | 'hybrid'>('streets');
+
   const [layers, setLayers] = useState({
     incidents: true,
     teams: true,
@@ -209,31 +212,72 @@ export const DisasterMap: React.FC<DisasterMapProps> = ({
         </button>
       </div>
 
-      {/* Top Right Quick-Focus Controls */}
-      {showFocusControls && (
-        <div className="absolute top-3 right-3 z-[1000] flex items-center gap-1.5">
-          {latestSOS && (
-            <button
-              onClick={() => {
-                if (onSelectIncident) {
-                  onSelectIncident(latestSOS);
-                }
-              }}
-              className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-md border border-rose-400 flex items-center gap-1.5 transition-all"
-              title="Fly map directly to newest reported SOS"
-            >
-              <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-              <span>Focus Latest SOS (#{latestSOS.tracking_code})</span>
-            </button>
-          )}
-
-          {enableMapClick && (
-            <span className="hidden sm:inline-block bg-slate-900/90 text-white text-[11px] font-medium px-2.5 py-1.5 rounded-xl shadow backdrop-blur-md">
-              📍 Click map to pin location
-            </span>
-          )}
+      {/* Top Right Controls & Mode Toggle */}
+      <div className="absolute top-3 right-3 z-[1000] flex flex-wrap items-center justify-end gap-1.5">
+        {/* Base Map Mode Switcher (Streets, Satellite, Hybrid) */}
+        <div className="bg-white/95 backdrop-blur-md rounded-xl border border-slate-200/90 shadow-sm p-1 flex items-center gap-1 text-xs">
+          <button
+            type="button"
+            onClick={() => setMapMode('streets')}
+            className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-all ${
+              mapMode === 'streets'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+            title="Standard Street Map View"
+          >
+            <span>🗺️</span>
+            <span>Streets</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMapMode('satellite')}
+            className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-all ${
+              mapMode === 'satellite'
+                ? 'bg-rose-700 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+            title="High-Resolution Global Satellite Imagery"
+          >
+            <span>🛰️</span>
+            <span>Satellite</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMapMode('hybrid')}
+            className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-all ${
+              mapMode === 'hybrid'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+            title="Satellite with Streets & Place Labels"
+          >
+            <span>🏷️</span>
+            <span>Hybrid</span>
+          </button>
         </div>
-      )}
+
+        {showFocusControls && latestSOS && (
+          <button
+            onClick={() => {
+              if (onSelectIncident) {
+                onSelectIncident(latestSOS);
+              }
+            }}
+            className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-md border border-rose-400 flex items-center gap-1.5 transition-all"
+            title="Fly map directly to newest reported SOS"
+          >
+            <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+            <span>Focus Latest SOS (#{latestSOS.tracking_code})</span>
+          </button>
+        )}
+
+        {showFocusControls && enableMapClick && (
+          <span className="hidden sm:inline-block bg-slate-900/90 text-white text-[11px] font-medium px-2.5 py-1.5 rounded-xl shadow backdrop-blur-md">
+            📍 Click map to pin location
+          </span>
+        )}
+      </div>
 
       {/* Main Leaflet Map */}
       <div style={{ height }}>
@@ -254,10 +298,40 @@ export const DisasterMap: React.FC<DisasterMapProps> = ({
           {/* Click Handler if active */}
           {enableMapClick && <MapClickHandler onLocationSelect={onLocationSelect} />}
 
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          {/* Dynamic Tile Layers based on Map Mode */}
+          {mapMode === 'streets' && (
+            <TileLayer
+              key="tile-streets"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+          )}
+
+          {mapMode === 'satellite' && (
+            <TileLayer
+              key="tile-satellite"
+              attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={19}
+            />
+          )}
+
+          {mapMode === 'hybrid' && (
+            <>
+              <TileLayer
+                key="tile-hybrid-base"
+                attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                maxZoom={19}
+              />
+              <TileLayer
+                key="tile-hybrid-labels"
+                attribution='&copy; Esri &mdash; World Boundaries and Places'
+                url="https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+                maxZoom={19}
+              />
+            </>
+          )}
 
           {/* Active Flood Zone Polygon */}
           {layers.zones && (
